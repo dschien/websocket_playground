@@ -9,6 +9,8 @@ from autobahn.twisted.websocket import WebSocketClientFactory, \
     WebSocketClientProtocol, \
     connectWS
 
+import simplejson as json
+
 import secure_auth
 
 logger = logging.getLogger(__name__)
@@ -31,8 +33,10 @@ class AliveLoggingReceivingCallbackWebsocketClientProtocol(WebSocketClientProtoc
 
     def onMessage(self, payload, isBinary):
         if not isBinary:
-            self.callback(payload)
             # print("Text message received: {}".format(payload.decode('utf8')))
+            success = self.callback(payload)
+            if not success:
+                self.factory.relogin()
 
     def log_alive(self):
         """
@@ -53,14 +57,18 @@ class AliveLoggingReceivingCallbackWebsocketClientProtocol(WebSocketClientProtoc
         super().connectionMade()
 
 
+# class ReloginProtocolFactory(ReconnectingClientFactory):
+
+
 class CallbackProtocolFactory(ReconnectingClientFactory, WebSocketClientFactory):
     protocol = AliveLoggingReceivingCallbackWebsocketClientProtocol
 
     maxDelay = 10
     maxRetries = 10
 
-    def __init__(self, *args, callback=None, **kwargs):
-        self.callback = callback
+    def __init__(self, *args, websocketCallback=None, login_func=None, **kwargs):
+        self.callback = websocketCallback
+        self.login_func = login_func
         super().__init__(*args, **kwargs)
 
     def startedConnecting(self, connector):
@@ -81,21 +89,40 @@ class CallbackProtocolFactory(ReconnectingClientFactory, WebSocketClientFactory)
         self._p.callback = self.callback
         return self._p
 
+    def relogin(self):
+        print('logging in again')
+        ws_url = self.login_func()
+        self.setSessionParameters(ws_url)
+        self.connector.disconnect()
+
+
+# class LoginCallbackProtocol
 
 def run(url, callback):
-    factory = CallbackProtocolFactory(ws_url, callback=callback)
+    factory = CallbackProtocolFactory(ws_url, websocketCallback=callback, login_func=get_ws_url)
     factory.callBack = callback
-    connectWS(factory)
-
+    connector = connectWS(factory)
+    factory.connector = connector
     reactor.run()
 
 
 def callback(payload):
-    print("Text message received: {}".format(payload.decode('utf8')))
+    response = payload.decode('utf8')
+    print("Text message received: {}".format(response))
+    data = json.loads(response)
+    if data['DataType'] == 1:
+        print("Found error code - login again")
+        return False
+    return True
+
+
+def get_ws_url():
+    ak, ak_id = secure_auth.get_auth_tokens()
+    ws_url = secure_auth.get_websocket_url(ak, ak_id)
+    return ws_url
 
 
 if __name__ == '__main__':
     log.startLogging(sys.stdout)
-    ak, ak_id = secure_auth.get_auth_tokens()
-    ws_url = secure_auth.get_websocket_url(ak, ak_id)
+    ws_url = get_ws_url()
     run(ws_url, callback)

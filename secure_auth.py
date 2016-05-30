@@ -67,7 +67,7 @@ def login():
     data = {"UserEMailID": local_settings.SECURE_SERVER_USER,
             "Password": hash_password(local_settings.SECURE_SERVER_PASSWORD)}
 
-    url = 'http://{server_address}/user/{command}'.format(server_address=local_settings.SECURE_SERVER_URL,
+    url = 'http://{server_address}/user/{command}'.format(server_address=local_settings.LOGIN_SERVER_URL,
                                                                command='login')
     r = requests.post(url, data=data)
 
@@ -129,7 +129,7 @@ def get_auth_tokens():
 
 
 def get_websocket_url(ak, ak_id):
-    server = 'ws://%(host)s%(port)s' % {'host': local_settings.SECURE_SERVER_URL, 'port': ''}
+    server = 'ws://%s' % local_settings.SECURE_SERVER_URL
     path = "/WebSocket/ConnectWebSocket".lower()
 
     date_time = get_dateheader()

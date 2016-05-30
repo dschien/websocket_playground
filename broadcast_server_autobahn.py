@@ -9,7 +9,7 @@ from autobahn.twisted.websocket import WebSocketServerFactory, \
     WebSocketServerProtocol, \
     listenWS
 
-ws_push_data = {"DataType": 0, "Data": {
+ws_push_data_gw_dto = {"DataType": 0, "Data": {
     "GDDO": {"GMACID": 46477239136514, "GCS": "1", "GN": "UOB00012", "LUT": "2016-05-27T13:43:42.686", "ZNDS": [
         {"ZID": 1, "DDDO": [{"DRefID": 262912, "DPID": 64,
                              "DPDO": [{"DPRefID": 309, "CV": "900", "LUT": "2016-04-20T08:22:08"},
@@ -40,6 +40,15 @@ ws_push_data = {"DataType": 0, "Data": {
                              "DPDO": [{"DPRefID": 301, "CV": "0", "LUT": "2016-04-21T14:47:27"},
                                       {"DPRefID": 107, "CV": "0", "LUT": "2016-04-20T08:24:24"},
                                       {"DPRefID": 102, "CV": "0", "LUT": "2016-04-20T08:24:23"}]}]}]}, "ALMS": []}}
+ws_push_data_cap_update = {"DataType": 1, "Data": {
+    "SO": [
+        {
+            "SUC": False, "ERR": [
+            {
+                "COD": "-848",
+                "VAL": "capability push"}
+        ]}
+    ]}}
 
 
 class BroadcastServerProtocol(WebSocketServerProtocol):
@@ -70,9 +79,12 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     def tick(self):
         self.tickcount += 1
-        # self.broadcast("tick %d from server" % self.tickcount)
-        self.broadcast(json.dumps(ws_push_data))
-        reactor.callLater(2, self.tick)
+        if self.tickcount % 4 == 0:
+            self.broadcast(json.dumps(ws_push_data_cap_update))
+        else:
+            self.broadcast(json.dumps(ws_push_data_gw_dto))
+
+        reactor.callLater(4, self.tick)
 
     def register(self, client):
         if client not in self.clients:
