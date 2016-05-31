@@ -57,18 +57,26 @@ class AliveLoggingReceivingCallbackWebsocketClientProtocol(WebSocketClientProtoc
         super().connectionMade()
 
 
-# class ReloginProtocolFactory(ReconnectingClientFactory):
+class ReloginReconnectingClientFactory(ReconnectingClientFactory):
+    def __init__(self, *args, login_func=None, **kwargs):
+        self.login_func = login_func
+        super().__init__(*args, **kwargs)
+
+    def relogin(self):
+        print('logging in again')
+        ws_url = self.login_func()
+        self.setSessionParameters(ws_url)
+        self.connector.disconnect()
 
 
-class CallbackProtocolFactory(ReconnectingClientFactory, WebSocketClientFactory):
+class CallbackProtocolFactory(ReloginReconnectingClientFactory, WebSocketClientFactory):
     protocol = AliveLoggingReceivingCallbackWebsocketClientProtocol
 
     maxDelay = 10
     maxRetries = 10
 
-    def __init__(self, *args, websocketCallback=None, login_func=None, **kwargs):
+    def __init__(self, *args, websocketCallback=None, **kwargs):
         self.callback = websocketCallback
-        self.login_func = login_func
         super().__init__(*args, **kwargs)
 
     def startedConnecting(self, connector):
@@ -89,16 +97,8 @@ class CallbackProtocolFactory(ReconnectingClientFactory, WebSocketClientFactory)
         self._p.callback = self.callback
         return self._p
 
-    def relogin(self):
-        print('logging in again')
-        ws_url = self.login_func()
-        self.setSessionParameters(ws_url)
-        self.connector.disconnect()
 
-
-# class LoginCallbackProtocol
-
-def run(url, callback):
+def run(ws_url, callback):
     factory = CallbackProtocolFactory(ws_url, websocketCallback=callback, login_func=get_ws_url)
     factory.callBack = callback
     connector = connectWS(factory)
