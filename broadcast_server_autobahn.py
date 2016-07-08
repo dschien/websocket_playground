@@ -84,7 +84,7 @@ class BroadcastServerFactory(WebSocketServerFactory):
         else:
             self.broadcast(json.dumps(ws_push_data_gw_dto))
 
-        reactor.callLater(4, self.tick)
+        reactor.callLater(30, self.tick)
 
     def register(self, client):
         if client not in self.clients:
@@ -97,7 +97,7 @@ class BroadcastServerFactory(WebSocketServerFactory):
             self.clients.remove(client)
 
     def broadcast(self, msg):
-        print("broadcasting message '{}' ..".format(msg))
+        print("broadcasting message '{}' ..".format(msg[:10]))
         for c in self.clients:
             c.sendMessage(msg.encode('utf8'))
             print("message sent to {}".format(c.peer))

@@ -1,33 +1,19 @@
 import logging
-import sys
 
-import datetime
+from autobahn.twisted.websocket import WebSocketClientFactory, WebSocketClientProtocol, connectWS
 from twisted.internet import reactor
 from twisted.internet.protocol import ReconnectingClientFactory
-from twisted.python import log
-
-from autobahn.twisted.websocket import WebSocketClientFactory, \
-    WebSocketClientProtocol, \
-    connectWS
-
-import simplejson as json
-
-import secure_auth
 
 logger = logging.getLogger(__name__)
-root = logging.getLogger()
-root.setLevel(logging.DEBUG)
-
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(funcName)s -  %(message)s')
-ch.setFormatter(formatter)
-root.addHandler(ch)
 
 
 class AliveLoggingReceivingCallbackWebsocketClientProtocol(WebSocketClientProtocol):
     """
-    Receive only websocket client that logs an alive message when connected.
+    Receive only websocket client that
+
+    - logs an alive message while connected
+    - periodically calls a health check function
+
     """
     alive = False
     callback = None
@@ -78,7 +64,7 @@ class ReloginReconnectingClientFactory(ReconnectingClientFactory):
     """
     Changes the websocket server address for a running client.
     """
-    health_check_interval = 15
+    health_check_interval = 300
     log_alive_interval = 300
 
     def __init__(self, *args, login_func=None, **kwargs):
@@ -103,12 +89,11 @@ class CallbackProtocolFactory(ReloginReconnectingClientFactory, WebSocketClientF
 
     def __init__(self, *args, websocketCallback=None, health_check_func=None, **kwargs):
         self.callback = websocketCallback
-        self.health_check_func = self.check_gateway_online
+        self.health_check_func = health_check_func
         super().__init__(*args, **kwargs)
-        self.old_map = None
 
     def startedConnecting(self, connector):
-        logger.debug('Started to connect.')
+        logger.info('Started to connect.')
 
     def clientConnectionLost(self, connector, reason):
         self._p.alive = False
@@ -126,49 +111,8 @@ class CallbackProtocolFactory(ReloginReconnectingClientFactory, WebSocketClientF
         self._p.health_check_func = self.health_check_func
         return self._p
 
-    @staticmethod
-    def datetime_now_string():
-        return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f0')
 
-    def check_gateway_online(self):
-        """
-        Implements the health check for check_health function in AliveLoggingReceivingCallbackWebsocketClientProtocol.
-
-        Must return True if healthy, False otherwise -> triggers disconnection from websocket (and reconnection attempt).
-
-        :return:
-        """
-        self.secure_server_name = 'test server'
-        gateway_last_healthy_update_time = CallbackProtocolFactory.datetime_now_string()
-        healthy, new_map = secure_auth.check_gateways_online(gateway_last_healthy_update_time)
-
-        # check whether a previously offline gateway is now online
-        # the first time this is run, skip
-        if self.old_map:
-            new_map_hash = hash(frozenset(new_map.items()))
-            old_map_hash = hash(frozenset(self.old_map.items()))
-
-            if not old_map_hash == new_map_hash:
-                # restart the websocket
-                logger.info('Secure server %s reports a change in gateway online status' % self.secure_server_name,
-                            extra={"server": self.secure_server_name})
-                return False
-
-        # store the old map for the next iteration
-        self.old_map = new_map
-
-        if healthy:
-            self.gateway_last_healthy_update_time = CallbackProtocolFactory.datetime_now_string()
-            logger.info('Secure server %s reports that all gateways are online' % self.secure_server_name,
-                        extra={"server": self.secure_server_name})
-            return True
-
-        logger.warn('One or more gateways are offline on server %s' % self.secure_server_name,
-                    extra={"server": self.secure_server_name})
-        return True
-
-
-def run(ws_url, message_callback, login_func):
+def run(ws_url, message_callback, login_func, health_check_func):
     """
 
     :param ws_url:
@@ -178,31 +122,9 @@ def run(ws_url, message_callback, login_func):
     :return:
     """
     logger.info("url: %s" % ws_url)
-    factory = CallbackProtocolFactory(ws_url, websocketCallback=message_callback, login_func=login_func)
+    factory = CallbackProtocolFactory(ws_url, websocketCallback=message_callback, login_func=login_func,
+                                      health_check_func=health_check_func)
     factory.callBack = message_callback
-
     connector = connectWS(factory)
     factory.connector = connector
     reactor.run()
-
-
-def callback(payload):
-    response = payload.decode('utf8')
-    print("Message received: {}".format(response[:10]))
-    data = json.loads(response)
-    if data['DataType'] == 1:
-        print("Found error code - login again")
-        return False
-    return True
-
-
-def get_ws_url():
-    ak, ak_id = secure_auth.get_auth_tokens()
-    ws_url = secure_auth.get_websocket_url(ak, ak_id)
-    return ws_url
-
-
-if __name__ == '__main__':
-    log.startLogging(sys.stdout)
-    ws_url = get_ws_url()
-    run(ws_url, callback, get_ws_url)

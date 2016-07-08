@@ -13,6 +13,80 @@ import local_settings
 logger = logging.getLogger(__name__)
 
 
+def perform_get_request(path):
+    """
+    Performs a GET request to the specified path, first setting the necessary authorization headers.
+
+    :param path: The request path, appended to the server's HOST
+    :returns: The response and the HTTP status code of the request
+    """
+    url = 'http://{server_address}{path}'.format(
+        server_address=local_settings.LOGIN_SERVER_URL, path=path)
+
+    logger.debug("Calling {path}".format(path=path))
+    r = requests.get(url)
+
+    res = json.loads(r.content)
+
+    # if self.is_capability_push(r, res):
+    #     # @todo do we need to have a counter here to prevent this from looping?
+    #     return self.perform_get_request(path)
+
+    logger.debug(
+        'Call to {path} from secure server got response [HTTP Code {code}]'.format(path=path, code=r.status_code),
+        extra={'response': json.dumps(res)})
+
+    return res, r.status_code
+
+
+def get_gateway_list():
+    return perform_get_request('/user/GatewayList')
+
+
+def get_gateway_data(gmacid, last_update_time):
+    hexmac = hex(gmacid)
+    path = '/gateway/gatewaydata?gatewayMACID={gmacid}&lastupdatetime="{lut}"'.format(gmacid=hexmac,
+                                                                                      lut=last_update_time)
+    return perform_get_request(path)
+
+
+SECURE_GCS_CONNECTED = "1"
+
+
+def check_gateway_online(GMACID, last_update_time):
+    res, status_code = get_gateway_data(GMACID, last_update_time)
+
+    if status_code != 200:
+        logger.warn('Unable to retrieve gateway data fom {}'.format(GMACID))
+        return False
+
+    return res['GDDO']['GCS'] == SECURE_GCS_CONNECTED
+
+
+def check_gateways_online(last_update_time):
+    res, status_code = get_gateway_list()
+
+    if status_code != 200:
+        logger.warn('Unable to retrieve list of gateways from {}'.format('test server'))
+        return False
+
+    healthy = True
+    map = {}
+
+    for gateway in res:
+        gmacid = gateway['GMACID']
+
+        this_healthy = check_gateway_online(gmacid, last_update_time)
+        map[gmacid] = this_healthy
+        if this_healthy:
+            logger.info('Gateway {} is online'.format(gmacid))
+        else:
+            logger.warn('Gateway {} is offline'.format(gmacid))
+            healthy = False
+
+    return healthy, map
+
+
 def update_device_data(data_str, device_parameter):
     path = '/Gateway/UpdateDeviceData'
     url = 'http://{server_address}{path}'.format(server_address=local_settings.SECURE_SERVER_URL, path=path)
@@ -68,11 +142,11 @@ def login():
             "Password": hash_password(local_settings.SECURE_SERVER_PASSWORD)}
 
     url = 'http://{server_address}/user/{command}'.format(server_address=local_settings.LOGIN_SERVER_URL,
-                                                               command='login')
+                                                          command='login')
     r = requests.post(url, data=data)
 
     res = json.loads(r.content)
-    print(res)
+    # print(res)
     # Get Session
     ak = res['SSD']['AK']
     ak_id = res['SSD']['AKID']
