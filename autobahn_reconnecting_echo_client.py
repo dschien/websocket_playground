@@ -73,6 +73,9 @@ class AliveLoggingReceivingCallbackWebsocketClientProtocol(WebSocketClientProtoc
         reactor.callLater(3, self.check_health)
         super().connectionMade()
 
+    def onClose(self, wasClean, code, reason):
+        print("WebSocket connection closed: {0}".format(reason))
+
 
 class ReloginReconnectingClientFactory(ReconnectingClientFactory):
     """

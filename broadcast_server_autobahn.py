@@ -1,13 +1,11 @@
+import queue
 import sys
-import simplejson as json
-from twisted.internet import reactor
-from twisted.python import log
-from twisted.web.server import Site
-from twisted.web.static import File
 
+import simplejson as json
 from autobahn.twisted.websocket import WebSocketServerFactory, \
     WebSocketServerProtocol, \
     listenWS
+from twisted.python import log
 
 ws_push_data_gw_dto = {"DataType": 0, "Data": {
     "GDDO": {"GMACID": 46477239136514, "GCS": "1", "GN": "UOB00012", "LUT": "2016-05-27T13:43:42.686", "ZNDS": [
@@ -64,6 +62,9 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
         WebSocketServerProtocol.connectionLost(self, reason)
         self.factory.unregister(self)
 
+    def onClose(self, wasClean, code, reason):
+        print("WebSocket connection closed: {0}".format(reason))
+
 
 class BroadcastServerFactory(WebSocketServerFactory):
     """
@@ -86,7 +87,12 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
         reactor.callLater(30, self.tick)
 
-    def register(self, client):
+    def register(self, client: WebSocketServerProtocol):
+        """
+
+        :param client:
+        :return:
+        """
         if client not in self.clients:
             print("registered client {}".format(client.peer))
             self.clients.append(client)
@@ -101,6 +107,12 @@ class BroadcastServerFactory(WebSocketServerFactory):
         for c in self.clients:
             c.sendMessage(msg.encode('utf8'))
             print("message sent to {}".format(c.peer))
+
+        # if not q.empty():
+        #     cmd = q.get()
+        #     if cmd == 'close':
+        #         for c in self.clients:
+        #             c.sendClose()
 
 
 class BroadcastPreparedServerFactory(BroadcastServerFactory):
@@ -117,6 +129,24 @@ class BroadcastPreparedServerFactory(BroadcastServerFactory):
             print("prepared message sent to {}".format(c.peer))
 
 
+from twisted.internet import protocol, reactor
+
+q = queue.Queue()
+
+
+class WebsocketControl(protocol.Protocol):
+    def dataReceived(self, data):
+        cmd = data.decode("utf-8").strip()
+        # print(cmd)
+        # q.put(cmd, block=False)
+        self.transport.write(('added command %s to queue' % cmd).encode('utf-8'))
+
+
+class TelnetControlFactory(protocol.Factory):
+    def buildProtocol(self, addr):
+        return WebsocketControl()
+
+
 if __name__ == '__main__':
     log.startLogging(sys.stdout)
 
@@ -127,8 +157,7 @@ if __name__ == '__main__':
     factory.protocol = BroadcastServerProtocol
     listenWS(factory)
 
-    webdir = File(".")
-    web = Site(webdir)
-    reactor.listenTCP(8080, web)
-
+    # reactor.listenTCP(5678, factory)
+    reactor.listenTCP(8000, TelnetControlFactory())
+    #
     reactor.run()
