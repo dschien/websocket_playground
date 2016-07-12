@@ -108,11 +108,11 @@ class BroadcastServerFactory(WebSocketServerFactory):
             c.sendMessage(msg.encode('utf8'))
             print("message sent to {}".format(c.peer))
 
-        # if not q.empty():
-        #     cmd = q.get()
-        #     if cmd == 'close':
-        #         for c in self.clients:
-        #             c.sendClose()
+        if not q.empty():
+            cmd = q.get()
+            if cmd == 'close':
+                for c in self.clients:
+                    c.sendClose()
 
 
 class BroadcastPreparedServerFactory(BroadcastServerFactory):
@@ -137,8 +137,8 @@ q = queue.Queue()
 class WebsocketControl(protocol.Protocol):
     def dataReceived(self, data):
         cmd = data.decode("utf-8").strip()
-        # print(cmd)
-        # q.put(cmd, block=False)
+        print(cmd)
+        q.put(cmd, block=False)
         self.transport.write(('added command %s to queue' % cmd).encode('utf-8'))
 
 

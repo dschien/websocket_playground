@@ -38,7 +38,9 @@ class testHTTPServer_RequestHandler(BaseHTTPRequestHandler):
             message = json.dumps(get_gatewaylist_data(gw_mac_id=47197374102068))
 
         elif path.startswith('/gateway/gatewaydata'):
-            message = json.dumps(get_gateway_data(gw_mac_id=47197374102068, gcs=str(randint(0, 1))))
+            gcs = 1
+            # gcs = randint(0, 1)
+            message = json.dumps(get_gateway_data(gw_mac_id=47197374102068, gcs=str(gcs)))
         else:
             self.send_response(404, 'NOT FOUND')
             message = '{"message":"not found"}'

@@ -16,7 +16,7 @@ import secure_auth
 
 logger = logging.getLogger(__name__)
 root = logging.getLogger()
-root.setLevel(logging.DEBUG)
+root.setLevel(logging.WARN)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
@@ -74,7 +74,7 @@ class AliveLoggingReceivingCallbackWebsocketClientProtocol(WebSocketClientProtoc
         super().connectionMade()
 
     def onClose(self, wasClean, code, reason):
-        print("WebSocket connection closed: {0}".format(reason))
+        logger.warn("WebSocket connection closed: {0}".format(reason))
 
 
 class ReloginReconnectingClientFactory(ReconnectingClientFactory):
@@ -191,10 +191,10 @@ def run(ws_url, message_callback, login_func):
 
 def callback(payload):
     response = payload.decode('utf8')
-    print("Message received: {}".format(response[:10]))
+    logger.info("Message received: {}".format(response[:10]))
     data = json.loads(response)
     if data['DataType'] == 1:
-        print("Found error code - login again")
+        logger.info("Found error code - login again")
         return False
     return True
 
